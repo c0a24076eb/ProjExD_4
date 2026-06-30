@@ -127,6 +127,9 @@ class Bomb(pg.sprite.Sprite):
         self.rect.centery = emy.rect.centery+emy.rect.height//2
         self.speed = 6
 
+        # EMPで無効化されたかどうか
+        self.state = "active"
+
     def update(self):
         """
         爆弾を速度ベクトルself.vx, self.vyに基づき移動させる
@@ -156,6 +159,7 @@ class Beam(pg.sprite.Sprite):
         self.rect.centery = bird.rect.centery+bird.rect.height*self.vy
         self.rect.centerx = bird.rect.centerx+bird.rect.width*self.vx
         self.speed = 10
+
 
     def update(self):
         """
@@ -241,6 +245,32 @@ class Score:
         self.image = self.font.render(f"Score: {self.value}", 0, self.color)
         screen.blit(self.image, self.rect)
 
+class EMP:
+    """
+    電磁パルスに関するクラス
+    """
+    def __init__(self, emys: pg.sprite.Group, bombs: pg.sprite.Group, screen: pg.Surface):
+        """
+        敵機と爆弾を無効化し，黄色の半透明画面を表示する
+        """
+        # 敵機を無効化
+        for emy in emys:
+            emy.interval = float("inf")
+            emy.image = pg.transform.laplacian(emy.image)
+
+        # 爆弾を無効化
+        for bomb in bombs:
+            bomb.speed /= 2
+            bomb.state = "inactive"
+
+        # 黄色の半透明エフェクト
+        emp_img = pg.Surface((WIDTH, HEIGHT))
+        pg.draw.rect(emp_img, (255, 255, 0), (0, 0, WIDTH, HEIGHT))
+        emp_img.set_alpha(128)
+        screen.blit(emp_img, (0, 0))
+        pg.display.update()
+        time.sleep(0.05)
+
 
 def main():
     pg.display.set_caption("真！こうかとん無双")
@@ -263,6 +293,10 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            if event.type == pg.KEYDOWN and event.key == pg.K_e:
+                if score.value > 20:
+                    EMP(emys, bombs, screen)
+                    score.value -= 20
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -282,8 +316,10 @@ def main():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.value += 1  # 1点アップ
 
-        for bomb in pg.sprite.spritecollide(bird, bombs, True):  # こうかとんと衝突した爆弾リスト
-            bird.change_img(8, screen)  # こうかとん悲しみエフェクト
+        for bomb in pg.sprite.spritecollide(bird, bombs, True):
+            if bomb.state == "inactive":
+                continue
+            bird.change_img(8, screen)
             score.update(screen)
             pg.display.update()
             time.sleep(2)
